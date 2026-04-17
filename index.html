@@ -3,130 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>লাইভ টিভি নেটওয়ার্ক</title>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clappr@latest/dist/clappr.min.js"></script>
+    <title>লাইভ টিভি - প্রো প্লেয়ার</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body { font-family: sans-serif; background: #000; color: #fff; margin: 0; padding: 0; }
-        .player-box { width: 100%; max-width: 850px; margin: auto; background: #000; position: sticky; top: 0; z-index: 100; border-bottom: 2px solid #38bdf8; }
-        #player { width: 100%; aspect-ratio: 16/9; background: #111; }
+        body { font-family: sans-serif; background: #000; color: #fff; margin: 0; }
+        .player-wrapper { width: 100%; max-width: 850px; margin: auto; background: #000; position: sticky; top: 0; z-index: 100; }
+        video { width: 100%; aspect-ratio: 16/9; display: block; background: #111; }
         
-        .section-title { padding: 10px 15px; background: #111; font-weight: bold; color: #38bdf8; font-size: 14px; }
+        /* ডিজাইন আগের মতোই থাকবে */
+        .section-title { padding: 10px 15px; background: #111; font-weight: bold; color: #38bdf8; border-bottom: 1px solid #222; }
         .event-wrapper { display: flex; overflow-x: auto; padding: 15px; background: #050505; }
-        .event-card { 
-            min-width: 180px; height: 110px; background: #1e293b; margin-right: 15px; 
-            border-radius: 10px; position: relative; cursor: pointer; 
-            background-size: cover; background-position: center; border: 1px solid #333;
-        }
-        .event-card span { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8); padding: 5px; font-size: 11px; text-align: center; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
-
-        .controls { padding: 15px; }
-        #search { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #111; color: #fff; margin-bottom: 15px; box-sizing: border-box; }
-        .cat-bar { display: flex; overflow-x: auto; padding-bottom: 10px; }
-        .cat-item { padding: 8px 18px; background: #1e293b; border-radius: 20px; margin-right: 10px; cursor: pointer; white-space: nowrap; font-size: 13px; }
-        .cat-item.active { background: #3b82f6; }
-
-        .grid { display: flex; flex-wrap: wrap; padding: 10px; justify-content: flex-start; }
+        .event-card { min-width: 180px; height: 110px; background: #1e293b; margin-right: 15px; border-radius: 10px; position: relative; cursor: pointer; background-size: cover; background-position: center; border: 1px solid #333; }
+        .event-card span { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8); padding: 5px; font-size: 11px; text-align: center; }
+        .grid { display: flex; flex-wrap: wrap; padding: 10px; }
         .ch-item { width: 30%; max-width: 110px; margin: 1.5%; text-align: center; cursor: pointer; }
-        .ch-img { width: 80px; height: 80px; background: #111; border-radius: 12px; object-fit: cover; border: 1px solid #222; }
-        .ch-txt { font-size: 11px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ch-img { width: 80px; height: 80px; background: #111; border-radius: 12px; object-fit: cover; }
     </style>
 </head>
 <body>
 
-<div class="player-box">
-    <div id="player"></div>
+<div class="player-wrapper">
+    <video id="video" controls autoplay playsinline></video>
 </div>
 
 <div class="section-title">সরাসরি ইভেন্ট</div>
 <div id="eventBox" class="event-wrapper"></div>
 
-<div class="controls">
-    <input type="text" id="search" placeholder="চ্যানেল খুঁজুন..." onkeyup="doSearch()">
-    <div id="catBar" class="cat-bar">
-        <div class="cat-item active" onclick="filterByCat('All')">All</div>
-    </div>
-</div>
-
-<div id="mainBox" class="grid"></div>
+<div class="grid" id="mainBox"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script>
-    // Clappr Player Setup
-    var player = new Clappr.Player({
-        parentId: "#player",
-        source: "", // শুরুতে খালি থাকবে
-        width: '100%',
-        height: '100%',
-        autoPlay: true,
-        preload: 'auto',
-        mimeType: "application/x-mpegURL"
-    });
-
+    const video = document.getElementById('video');
     const S_URL = 'https://loaobuffipniwswylxyd.supabase.co';
     const S_KEY = 'sb_publishable_Y3LZPx7OkeJfztuTq4XkOg_WGDnvKlc';
     const _supabase = supabase.createClient(S_URL, S_KEY);
 
-    let masterData = [];
-
-    async function init() {
-        const { data } = await _supabase.from('strm_vault_data').select('*');
-        masterData = data || [];
-        renderAll(masterData);
-        setupCats(masterData);
-    }
-
-    function renderAll(data) {
-        const eBox = document.getElementById('eventBox');
-        const mBox = document.getElementById('mainBox');
-        eBox.innerHTML = ''; mBox.innerHTML = '';
-
-        data.forEach(item => {
-            if(item.sv_is_event) {
-                const e = document.createElement('div');
-                e.className = 'event-card';
-                e.style.backgroundImage = `url('${item.sv_logo || 'https://via.placeholder.com/200x120?text=Live'}')`;
-                e.innerHTML = `<span>${item.sv_title}</span>`;
-                e.onclick = () => playNow(item.sv_link);
-                eventBox.appendChild(e);
-            }
-
-            const c = document.createElement('div');
-            c.className = 'ch-item';
-            c.innerHTML = `<img src="${item.sv_logo || 'https://via.placeholder.com/80'}" class="ch-img"><div class="ch-txt">${item.sv_title}</div>`;
-            c.onclick = () => playNow(item.sv_link);
-            mainBox.appendChild(c);
-        });
-    }
-
-    function setupCats(data) {
-        const bar = document.getElementById('catBar');
-        const cats = ['All', ...new Set(data.map(i => i.sv_category))];
-        bar.innerHTML = '';
-        cats.forEach(c => {
-            const d = document.createElement('div');
-            d.className = 'cat-item';
-            d.innerText = c;
-            d.onclick = () => filterByCat(c);
-            bar.appendChild(d);
-        });
-    }
+    let hls = new Hls();
 
     function playNow(url) {
-        player.load(url);
-        player.play();
+        // CORS Proxy যোগ করা (যদি সরাসরি লিঙ্ক না চলে)
+        // অনেক সময় 'https://cors-anywhere.herokuapp.com/' ব্যবহার করা হয়, তবে এর নিজস্ব লিমিট আছে।
+        const finalUrl = url; 
+
+        if (Hls.isSupported()) {
+            hls.destroy(); // আগের স্ট্রিম বন্ধ করা
+            hls = new Hls();
+            hls.loadSource(finalUrl);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                video.play();
+            });
+            
+            // এরর হ্যান্ডেলিং
+            hls.on(Hls.Events.ERROR, function (event, data) {
+                if (data.fatal) {
+                    console.log("Fatal error, trying to recover...");
+                    hls.recoverMediaError();
+                }
+            });
+        } 
+        else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = finalUrl;
+            video.addEventListener('loadedmetadata', function() {
+                video.play();
+            });
+        }
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    function filterByCat(c) {
-        const filtered = (c === 'All') ? masterData : masterData.filter(i => i.sv_category === c);
-        renderAll(filtered);
-    }
-
-    function doSearch() {
-        const q = document.getElementById('search').value.toLowerCase();
-        const filtered = masterData.filter(i => i.sv_title.toLowerCase().includes(q));
-        renderAll(filtered);
+    async function init() {
+        const { data } = await _supabase.from('strm_vault_data').select('*');
+        const eBox = document.getElementById('eventBox');
+        const mBox = document.getElementById('mainBox');
+        
+        data.forEach(item => {
+            const card = document.createElement('div');
+            if(item.sv_is_event) {
+                card.className = 'event-card';
+                card.style.backgroundImage = `url('${item.sv_logo}')`;
+                card.innerHTML = `<span>${item.sv_title}</span>`;
+                card.onclick = () => playNow(item.sv_link);
+                eBox.appendChild(card);
+            } else {
+                const ch = document.createElement('div');
+                ch.className = 'ch-item';
+                ch.innerHTML = `<img src="${item.sv_logo}" class="ch-img"><div>${item.sv_title}</div>`;
+                ch.onclick = () => playNow(item.sv_link);
+                mBox.appendChild(ch);
+            }
+        });
     }
 
     init();
